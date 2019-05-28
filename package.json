@@ -1,0 +1,23 @@
+{
+  "name": "steem-stream",
+  "version": "1.0.0",
+  "description": "Simple script to stream blocks from the Steem blockchain",
+  "main": "steem-stream.js",
+  "dependencies": {
+    "dsteem": "^0.11.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/steem-monsters/steem-stream.git"
+  },
+  "author": "@yabapmatt",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/steem-monsters/steem-stream/issues"
+  },
+  "homepage": "https://github.com/steem-monsters/steem-stream#readme"
+}
