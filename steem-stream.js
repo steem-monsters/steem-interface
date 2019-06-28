@@ -22,7 +22,7 @@ function start() {
 }
 
 async function getNextBlock() {
-	var result = await steem_interface.call('get_dynamic_global_properties');
+	var result = await steem_interface.database('get_dynamic_global_properties');
 
 	if(!result) {
 		setTimeout(getNextBlock, 1000);
@@ -45,12 +45,12 @@ async function getNextBlock() {
 }
 
 async function processBlock(block_num) {
-	var block = await steem_interface.call('get_block', [block_num]);
+	var block = await steem_interface.database('get_block', [block_num]);
 
 	// Log every 1000th block loaded just for easy parsing of logs, or every block depending on logging level
 	utils.log('Processing block [' + block_num + ']...', block_num % 1000 == 0 ? 1 : 4);
 
-	if(!block) {
+	if(!block || !block.transactions) {
 		// Block couldn't be loaded...this is typically because it hasn't been created yet
 		utils.log('Error loading block [' + block_num + ']', 4);
 		await utils.timeout(1000);
