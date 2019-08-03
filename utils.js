@@ -1,4 +1,8 @@
-const config = require('./config');
+let _options = { logging_level: 3 };
+
+function set_options(options) {
+	_options = Object.assign(_options, options);
+}
 
 // Logging levels: 1 = Error, 2 = Warning, 3 = Info, 4 = Debug
 function log(msg, level, color) { 
@@ -8,8 +12,8 @@ function log(msg, level, color) {
 	if(color && log_colors[color])
 		msg = log_colors[color] + msg + log_colors.Reset;
 
-  if(level <= config.logging_level)
-    console.log(new Date().toString() + ' - ' + msg); 
+  if(level <= _options.logging_level)
+    console.log(new Date().toLocaleString() + ' - ' + msg); 
 }
 
 var log_colors = {
@@ -43,6 +47,7 @@ var log_colors = {
 function timeout(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 module.exports = {
-	log: log,
-	timeout: timeout
+	set_options,
+	log,
+	timeout
 }
