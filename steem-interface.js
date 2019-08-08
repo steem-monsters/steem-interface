@@ -175,7 +175,7 @@ function stream(options) {
 
 	// Load saved state (last block read)
 	if(_options.load_state)
-		_options.load_state();
+		last_block = await _options.load_state();
 
 	// Start streaming blocks
 	getNextBlock();
@@ -237,22 +237,19 @@ async function processBlock(block_num) {
 	last_block = block_num;
 
 	if(_options.save_state)
-		_options.save_state();
+		_options.save_state(last_block);
 }
 
-function loadState() {
+async function loadState() {
 	// Check if state has been saved to disk, in which case load it
 	if (fs.existsSync('state.json')) {
-		var state = JSON.parse(fs.readFileSync("state.json"));
-
-		if (state.last_block)
-			last_block = state.last_block;
-
-		utils.log('Restored saved state: ' + JSON.stringify(state));
+		let state = JSON.parse(fs.readFileSync("state.json"));
+    utils.log('Restored saved state: ' + JSON.stringify(state));
+    return state.last_block;
 	}
 }
 
-function saveState() {
+function saveState(last_block) {
   var state = {
 		last_block: last_block
   };
