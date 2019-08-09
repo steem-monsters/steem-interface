@@ -75,7 +75,7 @@ async function broadcast(method_name, params, key) {
 					reject(result.result);
 
 				return;
-			} catch { }
+			} catch(err) { }
 		}
 		
 		utils.log(`All nodes failed broadcasting [${method_name}]!`, 1, 'Red');
