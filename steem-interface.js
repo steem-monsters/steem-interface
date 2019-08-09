@@ -189,7 +189,7 @@ async function getNextBlock() {
 		return;
 	}
 
-	if(last_block == 0)
+	if(!last_block || isNaN(last_block))
 		last_block = result.head_block_number - 1;
 
 	// We are 20+ blocks behind!
