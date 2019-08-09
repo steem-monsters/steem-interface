@@ -170,7 +170,7 @@ async function transfer(from, to, amount, memo, key) {
 	return await broadcast('transfer', { amount, from, memo, to }, key);
 }
 
-function stream(options) {
+async function stream(options) {
 	_options = Object.assign(_options, options);
 
 	// Load saved state (last block read)
