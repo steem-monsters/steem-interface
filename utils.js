@@ -46,8 +46,18 @@ var log_colors = {
 
 function timeout(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function tryParse(json) {
+	try {
+		return JSON.parse(json);
+	} catch(err) {
+		log('Error trying to parse JSON: ' + json, 3, 'Red');
+		return null;
+	}
+}
+
 module.exports = {
 	set_options,
 	log,
-	timeout
+	timeout,
+	tryParse
 }

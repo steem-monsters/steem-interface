@@ -1,5 +1,6 @@
 const fs = require('fs');
 const utils = require('./utils');
+const steem_engine = require('./steem-engine');
 const dsteem = require('dsteem');
 
 let _options = {
@@ -9,7 +10,11 @@ let _options = {
 	save_state: saveState,
 	load_state: loadState,
 	on_block: null,
-	on_op: null
+	on_op: null,
+	steem_engine: {
+		rpc_url: "https://api.steem-engine.com/rpc",
+		chain_id: "ssc-mainnet1"
+	}
 };
 let clients = [];
 let last_block = 0;
@@ -18,6 +23,9 @@ function init(options) {
 	_options = Object.assign(_options, options);
 	utils.set_options(_options);
 	clients = _options.rpc_nodes.map(n => new dsteem.Client(n, { timeout: 1000 }));
+
+	if(_options.steem_engine) 
+		steem_engine.init(_options.steem_engine);
 }
 
 async function api(method_name, params) {
@@ -229,7 +237,10 @@ async function processBlock(block_num) {
 
 			for(var op_index = 0; op_index < trans.operations.length; op_index++) {
 				var op = trans.operations[op_index];
-				await _options.on_op(op, block_num, block.block_id, block.previous, block.transaction_ids[i], block_time);
+
+				try {
+					await _options.on_op(op, block_num, block.block_id, block.previous, block.transaction_ids[i], block_time);
+				} catch(err) { utils.log(`Error processing transaction [${block.transaction_ids[i]}]: ${err}`, 1, 'Red'); }
 			}
 		}
 	}
@@ -250,12 +261,8 @@ async function loadState() {
 }
 
 function saveState(last_block) {
-  var state = {
-		last_block: last_block
-  };
-
-  // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify(state), function (err) {
+  // Save the last block read to disk
+  fs.writeFile('state.json', JSON.stringify({ last_block }), function (err) {
     if (err)
       utils.log(err);
   });
@@ -267,5 +274,6 @@ module.exports = {
 	broadcast,
 	custom_json,
 	transfer,
-	stream
+	stream,
+	steem_engine: steem_engine
 }
