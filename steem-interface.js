@@ -168,7 +168,7 @@ async function send_custom_json(id, json, account, key, use_active, retries) {
 			utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 2, 'Yellow');
 
 			if(retries < 3)
-				return await send_custom_json(id, json, use_active, retries + 1);
+				return await send_custom_json(id, json, account, key, use_active, retries + 1);
 			else
 			utils.log(`Broadcasting custom_json [${id}] failed! Error: ${err}`, 1, 'Red');
 		});
