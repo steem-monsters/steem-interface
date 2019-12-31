@@ -226,7 +226,7 @@ async function processBlock(block_num) {
 	}
 
 	if(_options.on_block)
-		await _options.on_block(block);
+		await _options.on_block(block_num, block);
 
 	if(_options.on_op) {
 		var block_time = new Date(block.timestamp + 'Z');
