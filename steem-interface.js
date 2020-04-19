@@ -6,11 +6,12 @@ const dsteem = require('dsteem');
 let _options = {
 	logging_level: 3,
 	rpc_error_limit: 5,
-	rpc_nodes: ["https://api.steemit.com", "https://anyx.io", "https://rpc.usesteem.com"],
+	rpc_nodes: ["https://api.steemit.com", "https://steemd.minnowsupportproject.org", "https://seed.steemmonsters.com"],
 	save_state: saveState,
 	load_state: loadState,
 	on_block: null,
 	on_op: null,
+	on_behind_blocks: null,
 	steem_engine: {
 		rpc_url: "https://api.steem-engine.com/rpc",
 		chain_id: "ssc-mainnet1"
@@ -65,6 +66,8 @@ async function tryDatabaseCall(client, method_name, params) {
 
 async function broadcast(method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
+		let error = null;
+
 		for(let i = 0; i < clients.length; i++) {
 			if(clients[i].sm_disabled) {
 				// Check how recently the node was disabled and re-enable if it's been over an hour
@@ -75,39 +78,26 @@ async function broadcast(method_name, params, key) {
 			}
 
 			try {
-				let result = await trySteemBroadcast(clients[i], method_name, params, key);
-
-				if(result.success)
-					resolve(result.result);
-				else
-					reject(result.result);
-
-				return;
-			} catch(err) { }
+				resolve(await trySteemBroadcast(clients[i], method_name, params, key));
+			} catch(err) { error = err; }
 		}
 		
 		utils.log(`All nodes failed broadcasting [${method_name}]!`, 1, 'Red');
-		reject();
+		reject(error);
 	});
 }
 
 async function trySteemBroadcast(client, method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
-		client.broadcast.sendOperations([[method_name, params]], dsteem.PrivateKey.fromString(key))
-			.then(result => resolve({ success: true, result }))
-			.catch(err => { 
-				utils.log(`Error calling [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
+		try {
+			client.broadcast.sendOperations([[method_name, params]], dsteem.PrivateKey.fromString(key)).then(resolve)
+		} catch (err) { 
+			utils.log(`Error broadcasting tx [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
 
-				// If it's an RPC error it means the node is working ok but the transaction was bad
-				if(err && err.name == 'RPCError') {
-					resolve({ success: false, result: err });
-					return;
-				}
-
-				// Record that this client had an error
-				updateClientErrors(client);
-				reject(err);
-			});
+			// Record that this client had an error
+			updateClientErrors(client);
+			reject(err);
+		}
 	});
 }
 
@@ -132,26 +122,7 @@ function updateClientErrors(client) {
 	}
 }
 
-let json_queue = [];
-check_json_queue();
-
 async function custom_json(id, json, account, key, use_active) {
-	return new Promise(resolve => json_queue.push({ id, json, account, key, use_active, resolve }));
-}
-
-async function check_json_queue() {
-	while(json_queue.length > 0) {
-		let op = json_queue.shift();
-		op.resolve(await send_custom_json(op.id, op.json, op.account, op.key, op.use_active));
-	}
-
-	setTimeout(check_json_queue, 3000);
-}
-
-async function send_custom_json(id, json, account, key, use_active, retries) {
-	if(!retries)
-		retries = 0;
-
 	var data = {
 		id: id, 
 		json: JSON.stringify(json),
@@ -159,19 +130,17 @@ async function send_custom_json(id, json, account, key, use_active, retries) {
 		required_posting_auths: use_active ? [] : [account]
 	}
 
-	return await broadcast('custom_json', data, key)
-		.then(r => {
-			utils.log(`Custom JSON [${id}] broadcast successfully.`, 3);
-			return r;
-		})
-		.catch(async err => {
-			utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 2, 'Yellow');
-
-			if(retries < 3)
-				return await send_custom_json(id, json, account, key, use_active, retries + 1);
-			else
-			utils.log(`Broadcasting custom_json [${id}] failed! Error: ${err}`, 1, 'Red');
-		});
+	return new Promise((resolve, reject) => {
+		broadcast('custom_json', data, key)
+			.then(r => {
+				utils.log(`Custom JSON [${id}] broadcast successfully.`, 3);
+				resolve(r);
+			})
+			.catch(async err => {
+				utils.log(`Error broadcasting custom_json [${id}]. Error: ${err}`, 1, 'Red');
+				reject(err);
+			});
+	});
 }
 
 async function transfer(from, to, amount, memo, key) {
@@ -197,15 +166,21 @@ async function getNextBlock() {
 		return;
 	}
 
+	let cur_block_num = _options.irreversible ? result.last_irreversible_block_num : (result.head_block_number - (_options.wait_blocks || 0));
+
 	if(!last_block || isNaN(last_block))
-		last_block = result.head_block_number - 1;
+		last_block = cur_block_num - 1;
 
 	// We are 20+ blocks behind!
-	if(result.head_block_number >= last_block + 20)
-		utils.log('Streaming is ' + (result.head_block_number - last_block) + ' blocks behind!', 1, 'Red');
+	if(cur_block_num >= last_block + 20) {
+		utils.log('Streaming is ' + (cur_block_num - last_block) + ' blocks behind!', 1, 'Red');
+
+		if(_options.on_behind_blocks)
+			_options.on_behind_blocks(cur_block_num- last_block);
+	}
 
 	// If we have a new block, process it
-	while(result.head_block_number > last_block)
+	while(cur_block_num > last_block)
 		await processBlock(last_block + 1);
 
 	// Attempt to load the next block after a 1 second delay (or faster if we're behind and need to catch up)
