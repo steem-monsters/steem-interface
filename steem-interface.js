@@ -80,7 +80,12 @@ async function broadcast(method_name, params, key) {
 			try {
 				resolve(await trySteemBroadcast(clients[i], method_name, params, key));
 				return;
-			} catch(err) { error = err; }
+			} catch(err) { 
+				if(utils.isTxError(err))
+					return reject(err);
+
+				error = err; 
+			}
 		}
 		
 		utils.log(`All nodes failed broadcasting [${method_name}]!`, 1, 'Red');
@@ -91,12 +96,63 @@ async function broadcast(method_name, params, key) {
 async function trySteemBroadcast(client, method_name, params, key) {
 	return new Promise(async (resolve, reject) => {
 		try {
-			client.broadcast.sendOperations([[method_name, params]], dsteem.PrivateKey.fromString(key)).then(resolve)
+			let result = await client.broadcast.sendOperations([[method_name, params]], dsteem.PrivateKey.fromString(key));
+			resolve(result);
 		} catch (err) { 
 			utils.log(`Error broadcasting tx [${method_name}] from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
 
-			// Record that this client had an error
-			updateClientErrors(client);
+			// Record that this client had an error (if it's not an error with the transaction itself)
+			if(!utils.isTxError(err))
+				updateClientErrors(client);
+
+			reject(err);
+		}
+	});
+}
+
+async function sendSignedTx(tx) {
+	let op_name = tx.operations && tx.operations.length > 0 ? tx.operations[0][0] : null;
+
+	return new Promise(async (resolve, reject) => {
+		let error = null;
+		
+		for(let i = 0; i < clients.length; i++) {
+			if(clients[i].sm_disabled) {
+				// Check how recently the node was disabled and re-enable if it's been over an hour
+				if(clients[i].sm_last_error_date > Date.now() - 60 * 60 * 1000)
+					continue;
+				else
+					clients[i].sm_disabled = false;
+			}
+
+			try { 
+				resolve(await trySendSignedTx(clients[i], tx));
+				return;
+			} catch(err) {
+				if(utils.isTxError(err))
+					return reject(err);
+
+				error = err; 
+			}
+		}
+		
+		utils.log(`All nodes failed sending signed tx [${op_name}]!`, 1, 'Red');
+		reject(error);
+	});
+}
+
+async function trySendSignedTx(client, tx) {
+	return new Promise(async (resolve, reject) => {
+		try {
+			let result = await client.broadcast.send(tx);
+			resolve(result);
+		} catch (err) { 
+			utils.log(`Error sending signed tx from node: ${client.address}, Error: ${err}`, 1, 'Yellow');
+
+			// Record that this client had an error (if it's not an error with the transaction itself)
+			if(!utils.isTxError(err))
+				updateClientErrors(client);
+
 			reject(err);
 		}
 	});
@@ -251,5 +307,6 @@ module.exports = {
 	custom_json,
 	transfer,
 	stream,
+	sendSignedTx,
 	steem_engine: steem_engine
 }
